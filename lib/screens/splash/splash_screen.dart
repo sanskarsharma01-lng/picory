@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
+import '../../providers/profile_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,12 +14,23 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _navigateToLogin();
+    _checkLoginStatus();
   }
 
-  Future<void> _navigateToLogin() async {
+  Future<void> _checkLoginStatus() async {
     await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
+    if (!mounted) return;
+
+    final profileProvider = context.read<ProfileProvider>();
+    
+    // If not initialized yet, wait a bit or handle it
+    if (!profileProvider.isInitialized) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    if (profileProvider.token != null && profileProvider.token!.isNotEmpty) {
+      Navigator.pushReplacementNamed(context, AppConstants.homeRoute);
+    } else {
       Navigator.pushReplacementNamed(context, AppConstants.loginRoute);
     }
   }

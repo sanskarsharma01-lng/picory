@@ -7,6 +7,7 @@ import '../../models/group_model.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../../widgets/group_card.dart';
+import '../../widgets/shimmer_loading.dart';
 import '../album/album_screen.dart';
 import '../profile/profile_screen.dart';
 import '../group/qr_scanner_screen.dart';
@@ -308,7 +309,7 @@ class _GroupsTabState extends State<_GroupsTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const GroupListShimmer();
     }
 
     if (_error.isNotEmpty) {

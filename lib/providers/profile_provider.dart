@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileProvider extends ChangeNotifier {
   String _name = 'New User';
@@ -11,6 +12,7 @@ class ProfileProvider extends ChangeNotifier {
   bool _faceRegistered = false;
   String? _faceImage;
   bool _isLoading = false;
+  bool _isInitialized = false;
 
   String get name => _name;
   String get phoneNumber => _phoneNumber;
@@ -20,6 +22,33 @@ class ProfileProvider extends ChangeNotifier {
   bool get faceRegistered => _faceRegistered;
   String? get faceImage => _faceImage;
   bool get isLoading => _isLoading;
+  bool get isInitialized => _isInitialized;
+
+  ProfileProvider() {
+    _loadFromPrefs();
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    _token = prefs.getString('token');
+    _userId = prefs.getInt('user_id');
+    _name = prefs.getString('name') ?? 'New User';
+    _phoneNumber = prefs.getString('phone') ?? '';
+    _faceRegistered = prefs.getBool('face_registered') ?? false;
+    _faceImage = prefs.getString('face_image');
+    _isInitialized = true;
+    notifyListeners();
+  }
+
+  Future<void> _saveToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_token != null) prefs.setString('token', _token!);
+    if (_userId != null) prefs.setInt('user_id', _userId!);
+    prefs.setString('name', _name);
+    prefs.setString('phone', _phoneNumber);
+    prefs.setBool('face_registered', _faceRegistered);
+    if (_faceImage != null) prefs.setString('face_image', _faceImage!);
+  }
 
   void setUserData({
     required int id,
@@ -33,6 +62,7 @@ class ProfileProvider extends ChangeNotifier {
     _name = name ?? 'New User';
     _token = token;
     _faceRegistered = faceRegistered;
+    _saveToPrefs();
     notifyListeners();
   }
 
@@ -59,6 +89,7 @@ class ProfileProvider extends ChangeNotifier {
           _phoneNumber = data['phone'];
           _name = data['name'] ?? 'New User';
           _faceImage = data['face_image'];
+          _saveToPrefs();
         }
       }
     } catch (e) {
@@ -73,6 +104,7 @@ class ProfileProvider extends ChangeNotifier {
     _name = name;
     _phoneNumber = phoneNumber;
     _email = email;
+    _saveToPrefs();
     notifyListeners();
   }
 
@@ -91,29 +123,31 @@ class ProfileProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         if (responseData['success'] == true) {
-          _clearLocalData();
+          await _clearLocalData();
           return true;
         }
       } else if (response.statusCode == 401) {
-        // Unauthenticated - just clear local data
-        _clearLocalData();
+        await _clearLocalData();
         return true;
       }
     } catch (e) {
       debugPrint('Error during logout: $e');
     }
     
-    // Even if API fails, we often want to clear local data to allow user to try logging in again
-    _clearLocalData();
+    await _clearLocalData();
     return true;
   }
 
-  void _clearLocalData() {
+  Future<void> _clearLocalData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    
     _token = null;
     _userId = null;
     _faceImage = null;
     _phoneNumber = '';
     _name = 'New User';
+    _faceRegistered = false;
     notifyListeners();
   }
 }

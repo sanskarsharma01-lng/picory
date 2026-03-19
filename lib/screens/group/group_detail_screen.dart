@@ -8,6 +8,7 @@ import '../../models/photo_model.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../../widgets/photo_grid.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final GroupModel group;
@@ -55,8 +56,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
           final List<dynamic> photosData = responseData['data']['photos']['photos'];
           setState(() {
             _allPhotos = photosData.map((p) => PhotoModel.fromMap(p)).toList();
-            // Filtering logic for "My Photos" would go here if API supports it
-            // For now, we'll use a dummy filter or keep it empty if not applicable
             _myPhotos = _allPhotos.where((p) => p.isMyPhoto).toList();
             _isLoading = false;
           });
@@ -156,7 +155,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
           ];
         },
         body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
+          ? const PhotoGridShimmer()
           : _error.isNotEmpty
             ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
             : TabBarView(

@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/profile_provider.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -30,9 +31,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     const String imageBaseUrl = 'https://mandatorily-prettyish-darcel.ngrok-free.dev/storage/';
 
-    return profileProvider.isLoading 
-      ? const Center(child: CircularProgressIndicator())
-      : SingleChildScrollView(
+    if (profileProvider.isLoading) {
+      return const ProfileShimmer();
+    }
+
+    return SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 24),
