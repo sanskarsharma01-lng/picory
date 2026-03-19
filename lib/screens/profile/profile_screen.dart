@@ -3,42 +3,63 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/profile_provider.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch profile data when the screen is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProfileProvider>().fetchProfile();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final langProvider = Provider.of<LanguageProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final profileProvider = Provider.of<ProfileProvider>(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(langProvider.translate('profile')),
-      ),
-      body: SingleChildScrollView(
+    const String imageBaseUrl = 'https://mandatorily-prettyish-darcel.ngrok-free.dev/storage/';
+
+    return profileProvider.isLoading 
+      ? const Center(child: CircularProgressIndicator())
+      : SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 24),
             CircleAvatar(
               radius: 60,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: const Icon(
-                Icons.person,
-                size: 60,
-                color: Colors.white,
-              ),
+              backgroundImage: profileProvider.faceImage != null 
+                ? NetworkImage('$imageBaseUrl${profileProvider.faceImage}')
+                : null,
+              child: profileProvider.faceImage == null 
+                ? const Icon(
+                    Icons.person,
+                    size: 60,
+                    color: Colors.white,
+                  )
+                : null,
             ),
             const SizedBox(height: 16),
             Text(
-              'John Doe',
+              profileProvider.name,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              '+91 9876543210',
+              profileProvider.phoneNumber,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Colors.grey,
               ),
@@ -52,9 +73,7 @@ class ProfileScreen extends StatelessWidget {
                   icon: Icons.person_outline,
                   title: 'Edit Profile',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Edit profile feature')),
-                    );
+                    Navigator.pushNamed(context, AppConstants.editProfileRoute);
                   },
                 ),
                 _buildProfileTile(
@@ -139,6 +158,14 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 _buildProfileTile(
                   context,
+                  icon: Icons.description_outlined,
+                  title: 'Terms and Conditions',
+                  onTap: () {
+                    Navigator.pushNamed(context, AppConstants.termsRoute);
+                  },
+                ),
+                _buildProfileTile(
+                  context,
                   icon: Icons.privacy_tip_outlined,
                   title: 'Privacy Policy',
                   onTap: () {},
@@ -164,8 +191,7 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 32),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildProfileSection(BuildContext context,
@@ -248,12 +274,27 @@ class ProfileScreen extends StatelessWidget {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                Navigator.pushReplacementNamed(
-                  context,
-                  AppConstants.loginRoute,
+                // Show loading indicator
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(child: CircularProgressIndicator()),
                 );
+                
+                final success = await Provider.of<ProfileProvider>(context, listen: false).logout();
+                
+                if (mounted) {
+                  Navigator.pop(context); // Remove loading indicator
+                  if (success) {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      AppConstants.loginRoute,
+                      (route) => false,
+                    );
+                  }
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

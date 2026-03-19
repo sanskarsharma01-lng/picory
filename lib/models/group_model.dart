@@ -1,56 +1,37 @@
 class GroupModel {
-  final String id;
+  final int id;
   final String name;
-  final String thumbnailUrl;
-  final int memberCount;
-  final String groupCode;
+  final String barcode;
+  final String eventTitle;
+  final String eventDescription;
+  final String location;
+  final DateTime? eventDate;
+  final String? thumbnailUrl;
 
   GroupModel({
     required this.id,
     required this.name,
-    required this.thumbnailUrl,
-    required this.memberCount,
-    required this.groupCode,
+    required this.barcode,
+    required this.eventTitle,
+    required this.eventDescription,
+    required this.location,
+    this.eventDate,
+    this.thumbnailUrl,
   });
 
-  // Dummy data generator
-  static List<GroupModel> getDummyGroups() {
-    return [
-      GroupModel(
-        id: '1',
-        name: 'Family Trip 2024',
-        thumbnailUrl: 'https://via.placeholder.com/150',
-        memberCount: 8,
-        groupCode: 'ABCD',
-      ),
-      GroupModel(
-        id: '2',
-        name: 'Birthday Party',
-        thumbnailUrl: 'https://via.placeholder.com/150',
-        memberCount: 15,
-        groupCode: 'EFGH',
-      ),
-      GroupModel(
-        id: '3',
-        name: 'College Reunion',
-        thumbnailUrl: 'https://via.placeholder.com/150',
-        memberCount: 25,
-        groupCode: 'IJKL',
-      ),
-      GroupModel(
-        id: '4',
-        name: 'Wedding Ceremony',
-        thumbnailUrl: 'https://via.placeholder.com/150',
-        memberCount: 50,
-        groupCode: 'MNOP',
-      ),
-      GroupModel(
-        id: '5',
-        name: 'Office Outing',
-        thumbnailUrl: 'https://via.placeholder.com/150',
-        memberCount: 12,
-        groupCode: 'QRST',
-      ),
-    ];
+  factory GroupModel.fromMap(Map<String, dynamic> map) {
+    final event = map['event'] as Map<String, dynamic>? ?? {};
+    return GroupModel(
+      id: map['id'] ?? 0,
+      name: map['name'] ?? '',
+      barcode: map['barcode'] ?? '',
+      eventTitle: event['title'] ?? '',
+      eventDescription: event['description'] ?? '',
+      location: event['location'] ?? '',
+      eventDate: event['event_date'] != null 
+          ? DateTime.tryParse(event['event_date']) 
+          : null,
+      thumbnailUrl: null,
+    );
   }
 }

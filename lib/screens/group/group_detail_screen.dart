@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../models/group_model.dart';
 import '../../models/photo_model.dart';
 import '../../providers/language_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../../widgets/photo_grid.dart';
 
 class GroupDetailScreen extends StatefulWidget {
@@ -21,11 +24,60 @@ class GroupDetailScreen extends StatefulWidget {
 class _GroupDetailScreenState extends State<GroupDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  List<PhotoModel> _allPhotos = [];
+  List<PhotoModel> _myPhotos = [];
+  bool _isLoading = true;
+  String _error = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchGroupDetails();
+  }
+
+  Future<void> _fetchGroupDetails() async {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    final token = profileProvider.token;
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/group/${widget.group.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['success'] == true) {
+          final List<dynamic> photosData = responseData['data']['photos']['photos'];
+          setState(() {
+            _allPhotos = photosData.map((p) => PhotoModel.fromMap(p)).toList();
+            // Filtering logic for "My Photos" would go here if API supports it
+            // For now, we'll use a dummy filter or keep it empty if not applicable
+            _myPhotos = _allPhotos.where((p) => p.isMyPhoto).toList();
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _error = responseData['message'] ?? 'Failed to load details';
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _error = 'Failed to load details: ${response.statusCode}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Error: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -47,7 +99,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               pinned: true,
               flexibleSpace: FlexibleSpaceBar(
                 title: Text(
-                  widget.group.name,
+                  widget.group.eventTitle,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     shadows: [
@@ -61,20 +113,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 background: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(
-                      widget.group.thumbnailUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          child: const Icon(
-                            Icons.group,
-                            size: 80,
-                            color: Colors.white70,
-                          ),
-                        );
-                      },
-                    ),
+                    if (widget.group.thumbnailUrl != null)
+                      Image.network(
+                        widget.group.thumbnailUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(color: Colors.grey[300]);
+                        },
+                      )
+                    else
+                      Container(color: Colors.grey[300]),
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -107,21 +155,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             ),
           ];
         },
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildPhotoTab(PhotoModel.getMyPhotos(widget.group.id)),
-            _buildPhotoTab(PhotoModel.getAllPhotos(widget.group.id)),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Upload photo feature')),
-          );
-        },
-        child: const Icon(Icons.add_photo_alternate),
+        body: _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : _error.isNotEmpty
+            ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
+            : TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildPhotoTab(_myPhotos),
+                  _buildPhotoTab(_allPhotos),
+                ],
+              ),
       ),
     );
   }

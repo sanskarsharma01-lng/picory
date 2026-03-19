@@ -1,11 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../models/group_model.dart';
 import '../../providers/language_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../../widgets/group_card.dart';
 import '../album/album_screen.dart';
 import '../profile/profile_screen.dart';
+import '../group/qr_scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,12 +20,58 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  late PageController _pageController;
+  final GlobalKey<_GroupsTabState> _groupsTabKey = GlobalKey<_GroupsTabState>();
 
-  final List<Widget> _screens = [
-    const _GroupsTab(),
-    const AlbumScreen(),
-    const ProfileScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _joinGroup(String barcode) async {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    final token = profileProvider.token;
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/group/join'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'barcode': barcode}),
+      );
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (mounted) {
+        if (response.statusCode == 200 && responseData['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(responseData['data']['message'] ?? 'Joined successfully')),
+          );
+          // Refresh group list
+          _groupsTabKey.currentState?.fetchGroups();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(responseData['message'] ?? 'Failed to join group')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
 
   void _showJoinGroupBottomSheet() {
     final langProvider = Provider.of<LanguageProvider>(context, listen: false);
@@ -54,9 +104,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(color: Colors.grey.shade300),
                 ),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  _showQrScanner();
+                  final String? code = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const QrScannerScreen()),
+                  );
+                  if (code != null) {
+                    _joinGroup(code);
+                  }
                 },
               ),
               const SizedBox(height: 16),
@@ -81,40 +137,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showQrScanner() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('QR Code Scanner'),
-          content: Container(
-            height: 300,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.qr_code_scanner, size: 80, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('QR Scanner Placeholder'),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _showCodeInput() {
     final langProvider = Provider.of<LanguageProvider>(context, listen: false);
     final codeController = TextEditingController();
@@ -123,16 +145,17 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(langProvider.translate('enter_group_code')),
+          title: const Text('Enter Group Code'),
           content: TextField(
             controller: codeController,
-            maxLength: 4,
+            maxLength: 6,
             textCapitalization: TextCapitalization.characters,
             decoration: InputDecoration(
-              hintText: 'ABCD',
+              hintText: 'Enter 6-digit Code',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              counterText: '',
             ),
           ),
           actions: [
@@ -142,12 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (codeController.text.length == 4) {
+                if (codeController.text.length == 6) {
                   Navigator.pop(context);
+                  _joinGroup(codeController.text);
+                } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Joining group: ${codeController.text}'),
-                    ),
+                    const SnackBar(content: Text('Please enter a 6-digit code')),
                   );
                 }
               },
@@ -161,30 +184,61 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final langProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        centerTitle: false,
+        title: Text(_currentIndex == 0
+            ? AppConstants.appName
+            : _currentIndex == 1
+                ? langProvider.translate('album')
+                : langProvider.translate('profile')),
+        actions: [
+          if (_currentIndex == 0)
+            TextButton.icon(
+              onPressed: _showJoinGroupBottomSheet,
+              icon: const Icon(Icons.add),
+              label: Text(langProvider.translate('join_group')),
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
           setState(() {
             _currentIndex = index;
           });
         },
+        children: [
+          _GroupsTab(key: _groupsTabKey),
+          const AlbumScreen(),
+          const ProfileScreen(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        },
         items: [
           BottomNavigationBarItem(
             icon: const Icon(Icons.home),
-            label: Provider.of<LanguageProvider>(context).translate('home'),
+            label: langProvider.translate('home'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.photo_album),
-            label: Provider.of<LanguageProvider>(context).translate('album'),
+            label: langProvider.translate('album'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person),
-            label: Provider.of<LanguageProvider>(context).translate('profile'),
+            label: langProvider.translate('profile'),
           ),
         ],
       ),
@@ -192,65 +246,132 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _GroupsTab extends StatelessWidget {
-  const _GroupsTab();
+class _GroupsTab extends StatefulWidget {
+  const _GroupsTab({super.key});
+
+  @override
+  State<_GroupsTab> createState() => _GroupsTabState();
+}
+
+class _GroupsTabState extends State<_GroupsTab> {
+  List<GroupModel> _groups = [];
+  bool _isLoading = true;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    fetchGroups();
+  }
+
+  Future<void> fetchGroups() async {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    final token = profileProvider.token;
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/groups'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData['success'] == true) {
+          final List<dynamic> groupsData = responseData['data'];
+          setState(() {
+            _groups = groupsData.map((g) => GroupModel.fromMap(g)).toList();
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _error = responseData['message'] ?? 'Failed to load groups';
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _error = 'Failed to load groups: ${response.statusCode}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Error: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final langProvider = Provider.of<LanguageProvider>(context);
-    final groups = GroupModel.getDummyGroups();
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(langProvider.translate('groups')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.group_add),
-            onPressed: () {
-              final homeState =
-              context.findAncestorStateOfType<_HomeScreenState>();
-              homeState?._showJoinGroupBottomSheet();
-            },
-            tooltip: langProvider.translate('join_group'),
-          ),
-        ],
-      ),
-      body: groups.isEmpty
-          ? Center(
+    if (_error.isNotEmpty) {
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.group_off,
-              size: 80,
-              color: Colors.grey.shade400,
-            ),
+            Text(_error, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            Text(
-              'No groups yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.grey,
-              ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = '';
+                });
+                fetchGroups();
+              },
+              child: const Text('Retry'),
             ),
           ],
         ),
-      )
-          : ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: groups.length,
-        itemBuilder: (context, index) {
-          return GroupCard(
-            group: groups[index],
-            onTap: () {
-              Navigator.pushNamed(
-                context,
-                AppConstants.groupDetailRoute,
-                arguments: groups[index],
-              );
-            },
+      );
+    }
+
+    return _groups.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.group_off,
+                  size: 80,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No groups yet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: fetchGroups,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _groups.length,
+              itemBuilder: (context, index) {
+                return GroupCard(
+                  group: _groups[index],
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      AppConstants.groupDetailRoute,
+                      arguments: _groups[index],
+                    );
+                  },
+                );
+              },
+            ),
           );
-        },
-      ),
-    );
   }
 }

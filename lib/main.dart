@@ -7,11 +7,15 @@ import 'models/group_model.dart';
 import 'models/photo_model.dart';
 import 'providers/language_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/profile_provider.dart';
 import 'screens/auth/face_scan_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/otp_screen.dart';
 import 'screens/group/group_detail_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/photo/photo_view_screen.dart';
+import 'screens/profile/edit_profile_screen.dart';
+import 'screens/profile/terms_screen.dart';
 import 'screens/splash/splash_screen.dart';
 
 void main() {
@@ -27,6 +31,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
@@ -47,6 +52,12 @@ class MyApp extends StatelessWidget {
                 case AppConstants.loginRoute:
                   return MaterialPageRoute(
                     builder: (_) => const LoginScreen(),
+                  );
+
+                case AppConstants.otpRoute:
+                  final args = settings.arguments as Map<String, dynamic>;
+                  return MaterialPageRoute(
+                    builder: (_) => OtpScreen(arguments: args),
                   );
 
                 case AppConstants.faceScanRoute:
@@ -73,6 +84,16 @@ class MyApp extends StatelessWidget {
                       photos: args['photos'] as List<PhotoModel>,
                       initialIndex: args['initialIndex'] as int,
                     ),
+                  );
+
+                case AppConstants.editProfileRoute:
+                  return MaterialPageRoute(
+                    builder: (_) => const EditProfileScreen(),
+                  );
+
+                case AppConstants.termsRoute:
+                  return MaterialPageRoute(
+                    builder: (_) => const TermsScreen(),
                   );
 
                 default:

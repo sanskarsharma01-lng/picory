@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/group_model.dart';
-import '../providers/language_provider.dart';
 
 class GroupCard extends StatelessWidget {
   final GroupModel group;
@@ -15,8 +13,6 @@ class GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final langProvider = Provider.of<LanguageProvider>(context);
-
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
@@ -32,17 +28,23 @@ class GroupCard extends StatelessWidget {
                   width: 80,
                   height: 80,
                   color: Theme.of(context).colorScheme.primaryContainer,
-                  child: Image.network(
-                    group.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.group,
-                        size: 40,
-                        color: Colors.white70,
-                      );
-                    },
-                  ),
+                  child: group.thumbnailUrl != null
+                      ? Image.network(
+                          group.thumbnailUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.group,
+                              size: 40,
+                              color: Colors.white70,
+                            );
+                          },
+                        )
+                      : const Icon(
+                          Icons.group,
+                          size: 40,
+                          color: Colors.white70,
+                        ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -51,7 +53,7 @@ class GroupCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      group.name,
+                      group.eventTitle,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -59,18 +61,24 @@ class GroupCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
+                    Text(
+                      group.name,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Icon(
-                          Icons.people,
+                          Icons.location_on,
                           size: 16,
                           color: Colors.grey.shade600,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${group.memberCount} ${langProvider.translate('members')}',
-                          style:
-                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          group.location,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Colors.grey.shade600,
                           ),
                         ),
@@ -90,7 +98,7 @@ class GroupCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        'Code: ${group.groupCode}',
+                        'Barcode: ${group.barcode}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),

@@ -1,13 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/language_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../../widgets/custom_button.dart';
 
 class OtpScreen extends StatefulWidget {
-  final String mobileNumber;
+  final Map<String, dynamic> arguments;
 
-  const OtpScreen({super.key, required this.mobileNumber});
+  const OtpScreen({super.key, required this.arguments});
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -27,12 +30,63 @@ class _OtpScreenState extends State<OtpScreen> {
     if (_otpController.text.length == 6) {
       setState(() => _isLoading = true);
 
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final response = await http.post(
+          Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/verify-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': widget.arguments['user_id'].toString(),
+            'otp': _otpController.text,
+          }),
+        );
 
-      setState(() => _isLoading = false);
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppConstants.faceScanRoute);
+        setState(() => _isLoading = false);
+
+        if (response.statusCode == 200 && responseData['success'] == true) {
+          final data = responseData['data'];
+          final userData = data['user'];
+          
+          if (mounted) {
+            // Save user data to ProfileProvider
+            Provider.of<ProfileProvider>(context, listen: false).setUserData(
+              id: userData['id'],
+              phone: userData['phone'],
+              name: userData['name'],
+              token: data['token'],
+              faceRegistered: data['face_registered'] ?? false,
+            );
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('OTP verified successfully!')),
+            );
+
+            // Navigate based on face registration status
+            if (data['face_registered'] == true) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                AppConstants.homeRoute,
+                (route) => false,
+              );
+            } else {
+              Navigator.pushReplacementNamed(context, AppConstants.faceScanRoute);
+            }
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(responseData['message'] ?? 'Verification failed')),
+            );
+          }
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -43,13 +97,30 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _resendOtp() async {
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('OTP resent successfully!')),
+    
+    try {
+      final response = await http.post(
+        Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': widget.arguments['phone']}),
       );
+
+      setState(() => _isLoading = false);
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('OTP resent successfully!')),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
   }
 
@@ -83,7 +154,7 @@ class _OtpScreenState extends State<OtpScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Code is sent to ${widget.mobileNumber}',
+                'Code is sent to ${widget.arguments['phone']}',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Colors.grey,
                     ),

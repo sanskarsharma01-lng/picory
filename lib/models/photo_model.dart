@@ -1,10 +1,11 @@
 class PhotoModel {
-  final String id;
+  final int id;
   final String url;
-  final String groupId;
+  final int groupId;
   final bool isMyPhoto;
   final DateTime uploadedAt;
   final String uploaderName;
+  bool isSelectedForAlbum;
 
   PhotoModel({
     required this.id,
@@ -13,28 +14,35 @@ class PhotoModel {
     required this.isMyPhoto,
     required this.uploadedAt,
     required this.uploaderName,
+    this.isSelectedForAlbum = false,
   });
 
-  // Dummy data generator
-  static List<PhotoModel> getDummyPhotos(String groupId) {
-    final now = DateTime.now();
-    return List.generate(20, (index) {
-      return PhotoModel(
-        id: 'photo_${groupId}_$index',
-        url: 'https://via.placeholder.com/300x400?text=Photo+${index + 1}',
-        groupId: groupId,
-        isMyPhoto: index % 3 == 0,
-        uploadedAt: now.subtract(Duration(days: index)),
-        uploaderName: index % 3 == 0 ? 'Me' : 'User ${index + 1}',
-      );
-    });
+  factory PhotoModel.fromMap(Map<String, dynamic> map) {
+    return PhotoModel(
+      id: map['id'] ?? 0,
+      url: map['image'] ?? '',
+      groupId: map['group_id'] ?? 0,
+      isMyPhoto: false, // Updated from face scan logic typically
+      uploadedAt: map['created_at'] != null 
+          ? DateTime.tryParse(map['created_at']) ?? DateTime.now()
+          : DateTime.now(),
+      uploaderName: 'User', // Usually joined from uploader data if available
+    );
   }
 
-  static List<PhotoModel> getMyPhotos(String groupId) {
-    return getDummyPhotos(groupId).where((photo) => photo.isMyPhoto).toList();
-  }
+  // Static store for selected photos since user wants persistent selection in session
+  static final List<PhotoModel> _selectedPhotos = [];
 
-  static List<PhotoModel> getAllPhotos(String groupId) {
-    return getDummyPhotos(groupId);
+  static List<PhotoModel> getAlbumPhotos() => _selectedPhotos;
+
+  void toggleSelection() {
+    isSelectedForAlbum = !isSelectedForAlbum;
+    if (isSelectedForAlbum) {
+      if (!_selectedPhotos.any((p) => p.id == id)) {
+        _selectedPhotos.add(this);
+      }
+    } else {
+      _selectedPhotos.removeWhere((p) => p.id == id);
+    }
   }
 }

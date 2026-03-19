@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/language_provider.dart';
@@ -14,14 +16,11 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _mobileController = TextEditingController();
-  final _otpController = TextEditingController();
-  bool _isOtpSent = false;
   bool _isLoading = false;
 
   @override
   void dispose() {
     _mobileController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
@@ -29,36 +28,47 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      await Future.delayed(const Duration(seconds: 2));
-
-      setState(() {
-        _isLoading = false;
-        _isOtpSent = true;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('OTP sent successfully!')),
+      try {
+        final String phoneNumber = '+91${_mobileController.text}';
+        final response = await http.post(
+          Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': phoneNumber}),
         );
+
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+        setState(() => _isLoading = false);
+
+        if (response.statusCode == 200 && responseData['success'] == true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(responseData['data']['message'] ?? 'OTP sent successfully!')),
+            );
+            Navigator.pushNamed(
+              context,
+              AppConstants.otpRoute,
+              arguments: {
+                'phone': phoneNumber,
+                'user_id': responseData['data']['user_id'],
+              },
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(responseData['message'] ?? 'Failed to send OTP')),
+            );
+          }
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
       }
-    }
-  }
-
-  Future<void> _verifyOtp() async {
-    if (_otpController.text.length == 6) {
-      setState(() => _isLoading = true);
-
-      await Future.delayed(const Duration(seconds: 2));
-
-      setState(() => _isLoading = false);
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppConstants.faceScanRoute);
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid 6-digit OTP')),
-      );
     }
   }
 
@@ -108,6 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     labelText: langProvider.translate('mobile_number'),
                     prefixIcon: const Icon(Icons.phone),
+                    prefixText: '+91 ',
                     counterText: '',
                   ),
                   validator: (value) {
@@ -119,38 +130,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     }
                     return null;
                   },
-                  enabled: !_isOtpSent,
                 ),
-                const SizedBox(height: 16),
-                if (!_isOtpSent)
-                  CustomButton(
-                    text: langProvider.translate('send_otp'),
-                    onPressed: _isLoading ? null : _sendOtp,
-                    isLoading: _isLoading,
-                  ),
-                if (_isOtpSent) ...[
-                  TextFormField(
-                    controller: _otpController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    decoration: InputDecoration(
-                      labelText: langProvider.translate('enter_otp'),
-                      prefixIcon: const Icon(Icons.lock),
-                      counterText: '',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomButton(
-                    text: langProvider.translate('verify'),
-                    onPressed: _isLoading ? null : _verifyOtp,
-                    isLoading: _isLoading,
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: _isLoading ? null : _sendOtp,
-                    child: const Text('Resend OTP'),
-                  ),
-                ],
+                const SizedBox(height: 24),
+                CustomButton(
+                  text: langProvider.translate('send_otp'),
+                  onPressed: _isLoading ? null : _sendOtp,
+                  isLoading: _isLoading,
+                ),
               ],
             ),
           ),
