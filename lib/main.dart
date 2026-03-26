@@ -13,6 +13,7 @@ import 'screens/auth/face_scan_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_screen.dart';
 import 'screens/group/group_detail_screen.dart';
+import 'screens/group/qr_scanner_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/photo/photo_view_screen.dart';
 import 'screens/profile/edit_profile_screen.dart';
@@ -79,6 +80,11 @@ class MyApp extends StatelessWidget {
                   final group = settings.arguments as GroupModel;
                   return MaterialPageRoute(
                     builder: (_) => GroupDetailScreen(group: group),
+                  );
+
+                case AppConstants.qrScannerRoute:
+                  return MaterialPageRoute(
+                    builder: (_) => const QrScannerScreen(),
                   );
 
                 case AppConstants.photoViewRoute:

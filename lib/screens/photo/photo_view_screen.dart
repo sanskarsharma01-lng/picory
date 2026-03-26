@@ -91,9 +91,16 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
   }
 
   void _selectPhoto() {
+    setState(() {
+      widget.photos[_currentIndex].toggleSelection();
+    });
+    final isSelected = widget.photos[_currentIndex].isSelectedForAlbum;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Photo selected: ${widget.photos[_currentIndex].id}'),
+        content: Text(isSelected 
+            ? 'Photo added to album' 
+            : 'Photo removed from album'),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -107,7 +114,7 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
       backgroundColor: Colors.black,
       appBar: _showAppBar
           ? AppBar(
-        backgroundColor: Colors.black.withOpacity(0.5),
+        backgroundColor: Colors.black.withValues(alpha: 0.5),
         elevation: 0,
         title: Text(
           '${_currentIndex + 1} / ${widget.photos.length}',
@@ -162,7 +169,7 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        Colors.black.withOpacity(0.8),
+                        Colors.black.withValues(alpha: 0.8),
                         Colors.transparent,
                       ],
                     ),
@@ -208,9 +215,14 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
                             onTap: _deletePhoto,
                           ),
                           _buildActionButton(
-                            icon: Icons.check_circle,
+                            icon: widget.photos[_currentIndex].isSelectedForAlbum 
+                                ? Icons.check_circle 
+                                : Icons.check_circle_outline,
                             label: langProvider.translate('select'),
                             onTap: _selectPhoto,
+                            color: widget.photos[_currentIndex].isSelectedForAlbum 
+                                ? Colors.blue 
+                                : Colors.white,
                           ),
                         ],
                       ),
@@ -228,6 +240,7 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color color = Colors.white,
   }) {
     return InkWell(
       onTap: onTap,
@@ -237,12 +250,12 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 28),
+            Icon(icon, color: color, size: 28),
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: color,
                 fontSize: 12,
               ),
             ),

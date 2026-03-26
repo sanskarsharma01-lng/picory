@@ -11,6 +11,11 @@ class AppConstants {
   static const String photoViewRoute = '/photo-view';
   static const String editProfileRoute = '/edit-profile';
   static const String termsRoute = '/terms';
+  static const String qrScannerRoute = '/qr-scanner';
+
+  // Assets
+  // You can easily change the logo path here in the future
+  static const String appLogo = 'assets/images/logo.png';
 
   // Languages
   static const Map<String, String> languages = {

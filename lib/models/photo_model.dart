@@ -1,6 +1,7 @@
 class PhotoModel {
   final int id;
   final String url;
+  final String? thumbnailUrl;
   final int groupId;
   final bool isMyPhoto;
   final DateTime uploadedAt;
@@ -10,6 +11,7 @@ class PhotoModel {
   PhotoModel({
     required this.id,
     required this.url,
+    this.thumbnailUrl,
     required this.groupId,
     required this.isMyPhoto,
     required this.uploadedAt,
@@ -18,19 +20,20 @@ class PhotoModel {
   });
 
   factory PhotoModel.fromMap(Map<String, dynamic> map) {
+    final imageUrl = map['image'] ?? '';
     return PhotoModel(
       id: map['id'] ?? 0,
-      url: map['image'] ?? '',
+      url: imageUrl,
+      thumbnailUrl: map['thumbnail'] ?? imageUrl, // Use image url if thumbnail is missing
       groupId: map['group_id'] ?? 0,
-      isMyPhoto: false, // Updated from face scan logic typically
+      isMyPhoto: false, 
       uploadedAt: map['created_at'] != null 
           ? DateTime.tryParse(map['created_at']) ?? DateTime.now()
           : DateTime.now(),
-      uploaderName: 'User', // Usually joined from uploader data if available
+      uploaderName: 'User',
     );
   }
 
-  // Static store for selected photos since user wants persistent selection in session
   static final List<PhotoModel> _selectedPhotos = [];
 
   static List<PhotoModel> getAlbumPhotos() => _selectedPhotos;
