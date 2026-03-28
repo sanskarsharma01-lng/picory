@@ -21,16 +21,18 @@ class PhotoModel {
 
   factory PhotoModel.fromMap(Map<String, dynamic> map) {
     final imageUrl = map['image'] ?? '';
+    final user = map['user'] as Map<String, dynamic>? ?? {};
+    
     return PhotoModel(
       id: map['id'] ?? 0,
       url: imageUrl,
-      thumbnailUrl: map['thumbnail'] ?? imageUrl, // Use image url if thumbnail is missing
+      thumbnailUrl: map['thumbnail'] ?? imageUrl,
       groupId: map['group_id'] ?? 0,
-      isMyPhoto: false, 
+      isMyPhoto: map['is_my_photo'] ?? false, 
       uploadedAt: map['created_at'] != null 
           ? DateTime.tryParse(map['created_at']) ?? DateTime.now()
           : DateTime.now(),
-      uploaderName: 'User',
+      uploaderName: user['name'] ?? 'User',
     );
   }
 

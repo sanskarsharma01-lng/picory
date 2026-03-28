@@ -1,12 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import '../../core/constants/app_constants.dart';
-import '../../providers/language_provider.dart';
 import '../../providers/profile_provider.dart';
-import '../../widgets/custom_button.dart';
 
 class FaceScanScreen extends StatefulWidget {
   const FaceScanScreen({super.key});
@@ -20,7 +19,6 @@ class _FaceScanScreenState extends State<FaceScanScreen>
   bool _isScanning = false;
   bool _isFaceAligned = false;
   late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
   CameraController? _controller;
   bool _isCameraInitialized = false;
   String _errorMessage = '';
@@ -32,10 +30,6 @@ class _FaceScanScreenState extends State<FaceScanScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
 
     _initializeCamera();
   }
@@ -50,7 +44,6 @@ class _FaceScanScreenState extends State<FaceScanScreen>
           return;
         }
 
-        // Use front camera if available
         final frontCamera = cameras.firstWhere(
               (camera) => camera.lensDirection == CameraLensDirection.front,
           orElse: () => cameras.first,
@@ -58,15 +51,17 @@ class _FaceScanScreenState extends State<FaceScanScreen>
 
         _controller = CameraController(
           frontCamera,
-          ResolutionPreset.medium,
+          ResolutionPreset.high, 
           enableAudio: false,
+          imageFormatGroup: ImageFormatGroup.jpeg,
         );
 
         await _controller!.initialize();
         if (mounted) {
           setState(() => _isCameraInitialized = true);
 
-          // Simulate face detection/alignment logic after a short delay
+          // In a real app, you'd use a face detection library here.
+          // For now, we simulate alignment after 2 seconds.
           Future.delayed(const Duration(seconds: 2), () {
             if (mounted) {
               setState(() => _isFaceAligned = true);
@@ -89,7 +84,22 @@ class _FaceScanScreenState extends State<FaceScanScreen>
   }
 
   Future<void> _scanFace() async {
-    if (!_isCameraInitialized || !_isFaceAligned || _controller == null) return;
+    // CRITICAL: Prevent proceeding if face is not detected/aligned
+    if (!_isFaceAligned) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please align your face properly within the frame'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (!_isCameraInitialized || _controller == null) {
+      setState(() => _errorMessage = 'Camera not ready. Please try again.');
+      return;
+    }
 
     setState(() => _isScanning = true);
 
@@ -103,7 +113,6 @@ class _FaceScanScreenState extends State<FaceScanScreen>
         Uri.parse('https://mandatorily-prettyish-darcel.ngrok-free.dev/api/user/face-scan/register'),
       );
 
-      // Add Authorization header
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
@@ -119,19 +128,40 @@ class _FaceScanScreenState extends State<FaceScanScreen>
       setState(() => _isScanning = false);
 
       if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Face registered successfully!'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-
-          await Future.delayed(const Duration(milliseconds: 500));
-
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        
+        if (responseData['success'] == true) {
           if (mounted) {
-            Navigator.pushReplacementNamed(context, AppConstants.homeRoute);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Face registered successfully!'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, AppConstants.homeRoute);
+            }
+          }
+        } else {
+          // If server says face was not detected properly
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(responseData['message'] ?? 'Face not detected properly. Please try again.'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            // Reset alignment so user has to try again
+            setState(() => _isFaceAligned = false);
+            // Wait 2 seconds before "simulating" alignment again
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) setState(() => _isFaceAligned = true);
+            });
           }
         }
       } else {
@@ -170,7 +200,6 @@ class _FaceScanScreenState extends State<FaceScanScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
-              // Back button
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
@@ -183,199 +212,56 @@ class _FaceScanScreenState extends State<FaceScanScreen>
                 ),
               ),
               const SizedBox(height: 40),
-              // Title
-              Text(
+              const Text(
                 'Face Scan',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF1A1F36),
+                  color: Color(0xFF1A1F36),
                 ),
               ),
               const SizedBox(height: 12),
-              // Description
-              Text(
+              const Text(
                 'Please position your face securely within the frame to verify your identity.',
                 style: TextStyle(
                   fontSize: 15,
-                  color: const Color(0xFF6B7280),
+                  color: Color(0xFF6B7280),
                   height: 1.4,
                 ),
               ),
               const SizedBox(height: 32),
-              // Security note
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
                     Icon(
                       Icons.shield_outlined,
                       size: 20,
-                      color: const Color(0xFF5E6CE4),
+                      color: Color(0xFF5E6CE4),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Text(
                       'Secure & Encrypted',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFF1F2937),
+                        color: Color(0xFF1F2937),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 40),
-              // Camera preview with frame
               Expanded(
                 child: Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Outer frame
-                      Container(
-                        width: 300,
-                        height: 380,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.rectangle,
-                          borderRadius: BorderRadius.circular(32),
-                          border: Border.all(
-                            color: _isFaceAligned
-                                ? const Color(0xFF5E6CE4)
-                                : const Color(0xFFE5E7EB),
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _isFaceAligned
-                                  ? const Color(0xFF5E6CE4).withOpacity(0.3)
-                                  : Colors.transparent,
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(29),
-                          child: _buildCameraPreview(),
-                        ),
-                      ),
-                      // Animated scanning line
-                      if (!_isScanning && !_isFaceAligned)
-                        AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, child) {
-                            return Container(
-                              width: 300,
-                              height: 380,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(32),
-                                border: Border.all(
-                                  color: const Color(0xFF5E6CE4).withOpacity(0.5),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Stack(
-                                children: [
-                                  Positioned(
-                                    top: _pulseController.value * 380,
-                                    child: Container(
-                                      width: 300,
-                                      height: 2,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.transparent,
-                                            const Color(0xFF5E6CE4),
-                                            Colors.transparent,
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      // Face alignment indicator
-                      if (_isFaceAligned && !_isScanning)
-                        Container(
-                          width: 300,
-                          height: 380,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(32),
-                            border: Border.all(
-                              color: const Color(0xFF5E6CE4),
-                              width: 3,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF5E6CE4).withOpacity(0.5),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(0xFF5E6CE4).withOpacity(0.2),
-                                border: Border.all(
-                                  color: const Color(0xFF5E6CE4),
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.check,
-                                color: Color(0xFF5E6CE4),
-                                size: 32,
-                              ),
-                            ),
-                          ),
-                        ),
-                      // Loading indicator while scanning
-                      if (_isScanning)
-                        Container(
-                          width: 300,
-                          height: 380,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(32),
-                            color: Colors.black.withOpacity(0.5),
-                          ),
-                          child: const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                                SizedBox(height: 16),
-                                Text(
-                                  'Scanning face...',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  child: _buildCameraFrame(),
                 ),
               ),
               const SizedBox(height: 32),
-              // Error message if any
               if (_errorMessage.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -407,12 +293,11 @@ class _FaceScanScreenState extends State<FaceScanScreen>
                     ),
                   ),
                 ),
-              // Scan Face Button
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: (_isScanning || !_isCameraInitialized || !_isFaceAligned)
+                  onPressed: (_isScanning || !_isCameraInitialized)
                       ? null
                       : _scanFace,
                   style: ElevatedButton.styleFrom(
@@ -443,27 +328,7 @@ class _FaceScanScreenState extends State<FaceScanScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              // Skip button
-              Center(
-                child: TextButton(
-                  onPressed: _isScanning
-                      ? null
-                      : () {
-                    Navigator.pushReplacementNamed(
-                      context,
-                      AppConstants.homeRoute,
-                    );
-                  },
-                  child: Text(
-                    'Skip for now',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ),
-              ),
+              // REMOVED: Skip for now button - user MUST scan face
               const SizedBox(height: 20),
             ],
           ),
@@ -472,11 +337,142 @@ class _FaceScanScreenState extends State<FaceScanScreen>
     );
   }
 
+  Widget _buildCameraFrame() {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 300,
+          height: 380,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: _isFaceAligned
+                  ? const Color(0xFF5E6CE4)
+                  : const Color(0xFFE5E7EB),
+              width: 3,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _isFaceAligned
+                    ? const Color(0xFF5E6CE4).withOpacity(0.3)
+                    : Colors.transparent,
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(29),
+            child: _buildCameraPreview(),
+          ),
+        ),
+        if (!_isScanning && !_isFaceAligned)
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              return Container(
+                width: 300,
+                height: 380,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: const Color(0xFF5E6CE4).withOpacity(0.5),
+                    width: 2,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: _pulseController.value * 380,
+                      child: Container(
+                        width: 300,
+                        height: 2,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              Color(0xFF5E6CE4),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        if (_isFaceAligned && !_isScanning)
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF5E6CE4).withOpacity(0.2),
+              border: Border.all(
+                color: const Color(0xFF5E6CE4),
+                width: 2,
+              ),
+            ),
+            child: const Icon(
+              Icons.check,
+              color: Color(0xFF5E6CE4),
+              size: 32,
+            ),
+          ),
+        if (_isScanning)
+          Container(
+            width: 300,
+            height: 380,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              color: Colors.black.withOpacity(0.5),
+            ),
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Scanning face...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildCameraPreview() {
     if (_isCameraInitialized && _controller != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(29),
-        child: CameraPreview(_controller!),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final double cameraAspectRatio = _controller!.value.aspectRatio;
+          
+          return SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: constraints.maxWidth / cameraAspectRatio,
+                child: CameraPreview(_controller!),
+              ),
+            ),
+          );
+        },
       );
     }
 
@@ -486,16 +482,16 @@ class _FaceScanScreenState extends State<FaceScanScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.camera_alt_outlined,
               size: 48,
-              color: const Color(0xFF9CA3AF),
+              color: Color(0xFF9CA3AF),
             ),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               'Camera unavailable',
               style: TextStyle(
-                color: const Color(0xFF6B7280),
+                color: Color(0xFF6B7280),
                 fontSize: 14,
               ),
             ),
